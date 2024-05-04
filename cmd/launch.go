@@ -49,7 +49,7 @@ func includeLaunchFlags(cmd *cobra.Command) {
 func CorrectArguments(imageVersion string, machineArch string, machineCPU string,
 	machineMemory string, machineDisk string, sshPort string, machinePort string) error {
 
-	if !utils.StringSliceContains([]string{"alpine_3.16.0", "alpine_3.19.1", "alpine_3.16.0_lxd", "debian_11.3.0", "openbsd_7.5", "freebsd_14.0", "netbsd_10.0"}, imageVersion) {
+	if !utils.StringSliceContains([]string{"alpine_3.16.0", "alpine_3.19.1", "alpine_3.16.0_lxd", "debian_11.3.0", "openbsd_7.5", "freebsd_14.0", "netbsd_10.0", "windows_11"}, imageVersion) {
 		return errors.New("unsupported image. only -i alpine_3.16.0 | alpine_3.19.1 | debian_11.3.0 are currently available")
 	}
 

@@ -436,6 +436,9 @@ func (c *MachineConfig) Start() error {
 		highmem = "on"
 	}
 
+	aarch64ArgsWindows := []string{
+		"-M", "virt,highmem=" + highmem,
+		"-drive", "format=raw,file=" + filepath.Join(c.Location, "edk2-aarch64-code.fd") + ",if=pflash,readonly=on"}
 	aarch64Args := []string{
 		"-M", "virt,highmem=" + highmem,
 		"-bios", filepath.Join(c.Location, "edk2-aarch64-code.fd")}
@@ -453,7 +456,6 @@ func (c *MachineConfig) Start() error {
 		"-cpu", cpu,
 		"-accel", c.GetAccel(),
 		"-smp", "cpus=" + c.CPU + ",sockets=1,cores=" + c.CPU + ",threads=1",
-		"-drive", "if=virtio,file=" + filepath.Join(c.Location, c.Image),
 		"-nographic",
 		"-pidfile", filepath.Join(c.Location, "alpine.pid"),
 		"-chardev", "socket,id=char-serial,path=" + filepath.Join(c.Location,
@@ -462,15 +464,33 @@ func (c *MachineConfig) Start() error {
 		"-chardev", "socket,id=char-qmp,path=" + filepath.Join(c.Location, "alpine.qmp") + ",server=on,wait=off",
 		"-qmp", "chardev:char-qmp",
 		"-parallel", "none",
-		"-device", "virtio-rng-pci",
 		"-rtc", "base=utc,clock=host",
 		"-daemonize",
 		"-name", c.Alias}
+	if strings.Contains(c.Image, "windows") {
+		commonArgs = append(commonArgs,
+			"-device", "ramfb",
+			"-device", "qemu-xhci,id=usb-bus",
+			"-device", "usb-tablet,bus=usb-bus.0",
+			"-device", "usb-mouse,bus=usb-bus.0",
+			"-device", "usb-kbd,bus=usb-bus.0",
+			"-device", "nvme,drive=drive0,serial=drive0,bootindex=0",
+			"-drive", "if=none,media=disk,id=drive0,format=qcow2,file="+filepath.Join(c.Location, c.Image),
+		)
+	} else {
+		commonArgs = append(commonArgs,
+			"-drive", "if=virtio,file="+filepath.Join(c.Location, c.Image),
+			"-device", "virtio-rng-pci",
+		)
+	}
 
 	if strings.Contains(c.Image, "netbsd") {
 		commonArgs = append(commonArgs,
 			"-device", "virtio-net-pci,netdev=net0,mac="+c.MACAddress,
 			"-netdev", networkDevice)
+	} else if strings.Contains(c.Image, "windows") {
+		commonArgs = append(commonArgs,
+			"-nic", "user,model=virtio,hostfwd=tcp::"+c.SSHPort+"-:22")
 	} else {
 		commonArgs = append(commonArgs,
 			"--net", networkDevice,
@@ -478,7 +498,11 @@ func (c *MachineConfig) Start() error {
 	}
 
 	if c.Arch == "aarch64" {
-		qemuArgs = append(aarch64Args, commonArgs...)
+		if strings.Contains(c.Image, "windows") {
+			qemuArgs = append(aarch64ArgsWindows, commonArgs...)
+		} else {
+			qemuArgs = append(aarch64Args, commonArgs...)
+		}
 	}
 	if c.Arch == "x86_64" {
 		qemuArgs = append(x86Args, commonArgs...)
@@ -488,6 +512,8 @@ func (c *MachineConfig) Start() error {
 		qemuArgs = append(qemuArgs, mountArgs...)
 	}
 
+	log.Println(qemuCmd)
+	log.Println(qemuArgs)
 	cmd := exec.Command(qemuCmd, qemuArgs...)
 
 	cmd.Stdout = os.Stdout
