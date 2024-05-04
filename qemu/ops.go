@@ -107,6 +107,7 @@ func (c *MachineConfig) Exec(cmd string, root bool) error {
 			Auth: []ssh.AuthMethod{
 				ssh.Password(cred.CR),
 			},
+			// Timeout: 0,
 		}
 	} else { // utils.HostCred
 		// Use SSH agent (https://pkg.go.dev/golang.org/x/crypto/ssh/agent#example-NewClient)
@@ -122,6 +123,7 @@ func (c *MachineConfig) Exec(cmd string, root bool) error {
 				ssh.PublicKeysCallback(agentClient.Signers),
 			},
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			// Timeout:         0,
 		}
 	}
 
@@ -140,7 +142,7 @@ func (c *MachineConfig) Exec(cmd string, root bool) error {
 	defer session.Close()
 
 	// XXX get shells from /etc/shells instead?
-	if (cmd == "ash") || (cmd == "bash") {
+	if (cmd == "ash") || (cmd == "bash") || (cmd == "sh") {
 		err := attachShell(session)
 		if err != nil {
 			return err
@@ -428,7 +430,7 @@ func (c *MachineConfig) Start() error {
 
 	aarch64Args := []string{
 		"-M", "virt,highmem=" + highmem,
-		"-bios", filepath.Join(c.Location, "qemu_efi.fd")}
+		"-bios", filepath.Join(c.Location, "edk2-aarch64-code.fd")}
 
 	x86Args := []string{
 		"-global", "PIIX4_PM.disable_s3=1",
@@ -484,7 +486,7 @@ func (c *MachineConfig) Start() error {
 		c.CleanPIDFile()
 		return err
 	}
-
+	// time.Sleep(60 * time.Second)
 	if c.Mount != "" {
 		basename := filepath.Base(c.Mount)
 		mntcmd := make([]string, 3)
@@ -572,9 +574,9 @@ func (c *MachineConfig) Launch() error {
 	}
 
 	if c.Arch == "aarch64" {
-		if _, err := os.Stat(filepath.Join(cacheDir, "qemu_efi.fd")); errors.Is(err, os.ErrNotExist) {
-			err = utils.DownloadFile(filepath.Join(cacheDir, "qemu_efi.fd"),
-				"https://github.com/beringresearch/macpine/releases/download/v.01/qemu_efi.fd")
+		if _, err := os.Stat(filepath.Join(cacheDir, "edk2-aarch64-code.fd")); errors.Is(err, os.ErrNotExist) {
+			err = utils.DownloadFile(filepath.Join(cacheDir, "edk2-aarch64-code.fd"),
+				"https://github.com/you54f/macpine/releases/download/v.01/edk2-aarch64-code.fd")
 			if err != nil {
 				return errors.New("unable to download bios :" + err.Error())
 			}
@@ -594,7 +596,7 @@ func (c *MachineConfig) Launch() error {
 	}
 
 	if c.Arch == "aarch64" {
-		_, err = utils.CopyFile(filepath.Join(cacheDir, "qemu_efi.fd"), filepath.Join(targetDir, "qemu_efi.fd"))
+		_, err = utils.CopyFile(filepath.Join(cacheDir, "edk2-aarch64-code.fd"), filepath.Join(targetDir, "edk2-aarch64-code.fd"))
 		if err != nil {
 			os.RemoveAll(targetDir)
 			return err
@@ -625,64 +627,64 @@ func (c *MachineConfig) Launch() error {
 		return errors.New("unable to launch a new machine. " + err.Error())
 	}
 
-	// Make sure DNS is set up correctly
-	err = c.Exec("echo 'nameserver 8.8.8.8' > /etc/resolv.conf", true)
-	if err != nil {
-		return errors.New("unable to set up DNS: " + err.Error())
-	}
+	// // Make sure DNS is set up correctly
+	// err = c.Exec("echo 'nameserver 8.8.8.8' > /etc/resolv.conf", true)
+	// if err != nil {
+	// 	return errors.New("unable to set up DNS: " + err.Error())
+	// }
 
-	err = c.Exec("apk update && apk add --no-cache dhclient", true)
-	if err != nil {
-		return errors.New("unable to install dhclient: " + err.Error())
-	}
+	// err = c.Exec("apk update && apk add --no-cache dhclient", true)
+	// if err != nil {
+	// 	return errors.New("unable to install dhclient: " + err.Error())
+	// }
 
-	err = c.Exec(`cat >/etc/dhcp/dhclient.conf <<EOL
-	option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;
+	// err = c.Exec(`cat >/etc/dhcp/dhclient.conf <<EOL
+	// option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;
 
-	send host-name = gethostname();
-	request subnet-mask, broadcast-address, time-offset, routers,
-	        domain-name, domain-name-servers, domain-search, host-name,
-	        dhcp6.name-servers, dhcp6.domain-search, dhcp6.fqdn, dhcp6.sntp-servers,
-	        netbios-name-servers, netbios-scope, interface-mtu,
-	        rfc3442-classless-static-routes, ntp-servers;
+	// send host-name = gethostname();
+	// request subnet-mask, broadcast-address, time-offset, routers,
+	//         domain-name, domain-name-servers, domain-search, host-name,
+	//         dhcp6.name-servers, dhcp6.domain-search, dhcp6.fqdn, dhcp6.sntp-servers,
+	//         netbios-name-servers, netbios-scope, interface-mtu,
+	//         rfc3442-classless-static-routes, ntp-servers;
 
-	prepend domain-name-servers 8.8.8.8, 8.8.4.4;
-	EOL`, true)
-	if err != nil {
-		return errors.New("unable to configure dhclient: " + err.Error())
-	}
+	// prepend domain-name-servers 8.8.8.8, 8.8.4.4;
+	// EOL`, true)
+	// if err != nil {
+	// 	return errors.New("unable to configure dhclient: " + err.Error())
+	// }
 
-	err = c.Exec("rc-service networking restart", true)
-	if err != nil {
-		return errors.New("unable to restart networking services: " + err.Error())
-	}
+	// err = c.Exec("rc-service networking restart", true)
+	// if err != nil {
+	// 	return errors.New("unable to restart networking services: " + err.Error())
+	// }
 
-	// Resize disk on an alpine guest
-	if strings.Split(c.Image, "_")[0] == "alpine" {
-		//TODO add these dependencies into pre-baked macpine image
-		err := c.Exec("apk add --no-cache e2fsprogs-extra sfdisk partx", true) // root=true i.e. run as root
-		if err != nil {
-			return errors.New("unable to install dependencies: " + err.Error())
-		}
+	// // Resize disk on an alpine guest
+	// if strings.Split(c.Image, "_")[0] == "alpine" {
+	// 	//TODO add these dependencies into pre-baked macpine image
+	// 	err := c.Exec("apk add --no-cache e2fsprogs-extra sfdisk partx", true) // root=true i.e. run as root
+	// 	if err != nil {
+	// 		return errors.New("unable to install dependencies: " + err.Error())
+	// 	}
 
-		//send sfdisk command ,+ (<start>,<size>,<type>,<bootable>)
-		//default start (0), size + (all available), default type (linux data), default bootable (false)
-		err = c.Exec(`echo ",+" | sfdisk --no-reread --partno 3 /dev/vda && partx -u /dev/vda`, true)
-		if err != nil {
-			return errors.New("error updating partition table: " + err.Error())
-		}
+	// 	//send sfdisk command ,+ (<start>,<size>,<type>,<bootable>)
+	// 	//default start (0), size + (all available), default type (linux data), default bootable (false)
+	// 	err = c.Exec(`echo ",+" | sfdisk --no-reread --partno 3 /dev/vda && partx -u /dev/vda`, true)
+	// 	if err != nil {
+	// 		return errors.New("error updating partition table: " + err.Error())
+	// 	}
 
-		err = c.Exec("resize2fs /dev/vda3", true)
-		if err != nil {
-			return errors.New("error expanding filesystem: " + err.Error())
-		}
+	// 	err = c.Exec("resize2fs /dev/vda3", true)
+	// 	if err != nil {
+	// 		return errors.New("error expanding filesystem: " + err.Error())
+	// 	}
 
-		err = c.Exec("df -h", true)
-		if err != nil {
+	// 	err = c.Exec("df -h", true)
+	// 	if err != nil {
 
-			return err
-		}
-	}
+	// 		return err
+	// 	}
+	// }
 
 	return nil
 }

@@ -314,7 +314,7 @@ func DownloadFile(filepath string, url string) error {
 }
 
 func GetImageURL(version string) string {
-	url := "https://github.com/beringresearch/macpine/releases/download/v.01/" + version
+	url := "https://github.com/you54f/macpine/releases/download/v.01/" + version
 	return url
 }
 
