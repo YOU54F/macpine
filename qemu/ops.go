@@ -107,7 +107,7 @@ func (c *MachineConfig) Exec(cmd string, root bool) error {
 			Auth: []ssh.AuthMethod{
 				ssh.Password(cred.CR),
 			},
-			// Timeout: 0,
+			Timeout: 0,
 		}
 	} else { // utils.HostCred
 		// Use SSH agent (https://pkg.go.dev/golang.org/x/crypto/ssh/agent#example-NewClient)
@@ -123,15 +123,23 @@ func (c *MachineConfig) Exec(cmd string, root bool) error {
 				ssh.PublicKeysCallback(agentClient.Signers),
 			},
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			// Timeout:         0,
+			Timeout:         0,
 		}
 	}
 
 	var conn *ssh.Client
 
-	conn, err = ssh.Dial("tcp", host, conf)
-	if err != nil {
-		return err
+	for {
+		conn, err = ssh.Dial("tcp", host, conf)
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "connection reset by peer") {
+			fmt.Println("Connection reset by peer. Retrying...")
+			time.Sleep(5 * time.Second)
+		} else {
+			return err
+		}
 	}
 	defer conn.Close()
 
@@ -447,8 +455,6 @@ func (c *MachineConfig) Start() error {
 		"-smp", "cpus=" + c.CPU + ",sockets=1,cores=" + c.CPU + ",threads=1",
 		"-drive", "if=virtio,file=" + filepath.Join(c.Location, c.Image),
 		"-nographic",
-		"-device", "virtio-net-pci,netdev=net0,mac=" + c.MACAddress,
-		"-netdev", networkDevice,
 		"-pidfile", filepath.Join(c.Location, "alpine.pid"),
 		"-chardev", "socket,id=char-serial,path=" + filepath.Join(c.Location,
 			"alpine.sock") + ",server=on,wait=off,logfile=" + filepath.Join(c.Location, "alpine.log"),
@@ -460,6 +466,16 @@ func (c *MachineConfig) Start() error {
 		"-rtc", "base=utc,clock=host",
 		"-daemonize",
 		"-name", c.Alias}
+
+	if strings.Contains(c.Image, "netbsd") {
+		commonArgs = append(commonArgs,
+			"-device", "virtio-net-pci,netdev=net0,mac="+c.MACAddress,
+			"-netdev", networkDevice)
+	} else {
+		commonArgs = append(commonArgs,
+			"--net", networkDevice,
+			"--net", "nic")
+	}
 
 	if c.Arch == "aarch64" {
 		qemuArgs = append(aarch64Args, commonArgs...)
