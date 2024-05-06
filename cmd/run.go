@@ -10,18 +10,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// execCmd executes command on alpine vm
-var execCmd = &cobra.Command{
-	Use:     "exec <instance> <command>",
-	Short:   "execute a command on an instance over ssh.",
-	Run:     exec,
-	Aliases: []string{"x", "execute", "cmd", "command"},
+// runCmd executes command on alpine vm in the users current mac working directory
+var runCmd = &cobra.Command{
+	Use:     "run <instance> <command>",
+	Short:   "run a command on an instance over ssh, in the current working directory.",
+	Run:     runExec,
+	Aliases: []string{"run", "r", "mac", "cwd", "pwd", "cross"},
 
 	ValidArgsFunction:     host.AutoCompleteVMNames,
 	DisableFlagsInUseLine: true,
 }
 
-func exec(cmd *cobra.Command, args []string) {
+func runExec(cmd *cobra.Command, args []string) {
 	if len(args) == 0 {
 		log.Fatal("missing instance name")
 	}
@@ -43,7 +43,7 @@ func exec(cmd *cobra.Command, args []string) {
 		log.Printf("%s is not running", machineConfig.Alias)
 		machineConfig.Start()
 	}
-	err = host.Exec(machineConfig, cmdArgs)
+	err = host.Run(machineConfig, cmdArgs)
 	if err != nil {
 		log.Fatalln(err)
 	}

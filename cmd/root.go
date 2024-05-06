@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -19,8 +20,15 @@ var MacpineCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the MacpineCmd.
 func Execute() {
-	err := MacpineCmd.Execute()
-	if err != nil {
+	_, _, err := MacpineCmd.Find(os.Args[1:])
+	// default to run command which will run the command in the current working directory
+	// requires additional args (instance name and command to run)
+	if err != nil || os.Args[1:] == nil {
+		args := append([]string{"run"}, os.Args[1:]...)
+		MacpineCmd.SetArgs(args)
+	}
+	if err := MacpineCmd.Execute(); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }
@@ -38,6 +46,7 @@ func init() {
 	MacpineCmd.AddCommand(publishCmd)
 	MacpineCmd.AddCommand(importCmd)
 	MacpineCmd.AddCommand(execCmd)
+	MacpineCmd.AddCommand(runCmd)
 	MacpineCmd.AddCommand(editCmd)
 	MacpineCmd.AddCommand(renameCmd)
 	MacpineCmd.AddCommand(shellCmd)

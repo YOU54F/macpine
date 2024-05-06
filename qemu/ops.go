@@ -489,8 +489,13 @@ func (c *MachineConfig) Start() error {
 			"-device", "virtio-net-pci,netdev=net0,mac="+c.MACAddress,
 			"-netdev", networkDevice)
 	} else if strings.Contains(c.Image, "windows") {
-		commonArgs = append(commonArgs,
-			"-nic", "user,model=virtio,hostfwd=tcp::"+c.SSHPort+"-:22")
+		if c.Mount != "" {
+			commonArgs = append(commonArgs,
+				"-nic", "user,model=virtio,hostfwd=tcp::"+c.SSHPort+"-:22"+",smb="+c.Mount)
+		} else {
+			commonArgs = append(commonArgs,
+				"-nic", "user,model=virtio,hostfwd=tcp::"+c.SSHPort+"-:22")
+		}
 	} else {
 		commonArgs = append(commonArgs,
 			"--net", networkDevice,
@@ -508,7 +513,7 @@ func (c *MachineConfig) Start() error {
 		qemuArgs = append(x86Args, commonArgs...)
 	}
 
-	if c.Mount != "" {
+	if c.Mount != "" && (!strings.Contains(c.Image, "windows") && !strings.Contains(c.Image, "bsd")) {
 		qemuArgs = append(qemuArgs, mountArgs...)
 	}
 
@@ -528,13 +533,21 @@ func (c *MachineConfig) Start() error {
 		c.CleanPIDFile()
 		return err
 	}
-	// time.Sleep(60 * time.Second)
-	if c.Mount != "" {
+	if c.Mount != "" && !strings.Contains(c.Image, "windows") {
 		basename := filepath.Base(c.Mount)
 		mntcmd := make([]string, 3)
-		mntcmd[0] = "mkdir -p /mnt/" + basename
-		mntcmd[1] = "chmod 777 /mnt/" + basename
-		mntcmd[2] = "mount -t 9p -o trans=virtio,version=9p2000.L,msize=104857600 host0 /mnt/" + basename
+		// mntcmd[0] = "mkdir -p /mnt/" + basename
+		// mntcmd[1] = "chmod 777 /mnt/" + basename
+		if strings.Contains(c.Image, "bsd") {
+			mntcmd[0] = "mkdir -p /mnt/mac"
+			mntcmd[1] = "chmod 777 /mnt/mac"
+			mntcmd[2] = "/sbin/mount -v -t nfs 10.0.2.2:/System/Volumes/Data /mnt/mac"
+			// mntcmd[2] = "/sbin/mount -v -t nfs 10.0.2.2:/System/Volumes/Data /mnt/" + basename
+		} else {
+			mntcmd[0] = "mkdir -p /mnt/" + basename
+			mntcmd[1] = "chmod 777 /mnt/" + basename
+			mntcmd[2] = "mount -t 9p -o trans=virtio,version=9p2000.L,msize=104857600 host0 /mnt/" + basename
+		}
 		if err := c.Exec(strings.Join(mntcmd, " && "), true); err != nil {
 			log.Println("error mounting directory: " + err.Error())
 		} else {
