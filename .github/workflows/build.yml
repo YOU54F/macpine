@@ -27,6 +27,10 @@ jobs:
       - name: Build
         run: make
   
+
+      - name: Install qemu
+        run: brew install qemu
+  
       - name: Create
         run: bin/macross create -i netbsd_10.0 -m 256 -s 2224 -n netbsd
       - name: List
