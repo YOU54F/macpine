@@ -1,4 +1,4 @@
-BINARY_NAME := alpine
+BINARY_NAME := macross
 BUILD_DIR = bin
 PREFIX = /usr/local
 XCOMP_TARGETS = amd64 arm64
